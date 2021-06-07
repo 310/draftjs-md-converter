@@ -22,7 +22,8 @@ const defaultBlockStyles = {
   Header5: 'header-five',
   Header6: 'header-six',
   CodeBlock: 'code-block',
-  BlockQuote: 'blockquote'
+  BlockQuote: 'blockquote',
+  Table: 'table'
 };
 
 const getBlockStyleForMd = (node, blockStyles) => {
@@ -41,6 +42,8 @@ const getBlockStyleForMd = (node, blockStyles) => {
   ) {
     return 'atomic';
   } else if (node.type === 'Paragraph' && node.raw && node.raw.match(/^\[\[\s\S+\s.*\S+\s\]\]/)) {
+    return 'atomic';
+  } else if (node.type === 'Table') {
     return 'atomic';
   }
   return blockStyles[style];
@@ -65,13 +68,53 @@ const joinCodeBlocks = splitMd => {
   return splitMd;
 };
 
+const joinTableBlocks = splitMd => {
+  let opening = -1;
+  let closing = -1;
+
+  splitMd.some((row, i) => {
+    if (
+      row.length > 1 &&
+      row.indexOf('|') === 0 &&
+      row.lastIndexOf('|') === row.length - 1 &&
+      row.indexOf('\n') === -1
+    ) {
+      if (opening === -1) {
+        opening = i;
+      }
+    } else if (opening !== -1) {
+      closing = i - 1;
+      return true;
+    }
+    return false;
+  });
+
+  if (opening !== -1 && closing === -1) {
+    closing = splitMd.length - 1;
+  }
+
+  if (opening >= 0 && closing >= 0 && closing - opening >= 3) {
+    const tableBlock = splitMd.slice(opening, closing + 1);
+    const tableBlockJoined = tableBlock.join('\n');
+    const updatedSplitMarkdown = [
+      ...splitMd.slice(0, opening),
+      tableBlockJoined,
+      ...splitMd.slice(closing + 1)
+    ];
+
+    return joinTableBlocks(updatedSplitMarkdown);
+  }
+
+  return splitMd;
+};
+
 const splitMdBlocks = md => {
   const splitMd = md.split('\n');
 
   // Process the split markdown include the
   // one syntax where there's an block level opening
   // and closing symbol with content in the middle.
-  const splitMdWithCodeBlocks = joinCodeBlocks(splitMd);
+  const splitMdWithCodeBlocks = joinTableBlocks(joinCodeBlocks(splitMd));
   return splitMdWithCodeBlocks;
 };
 
@@ -154,6 +197,54 @@ const parseMdLine = (line, existingEntities, extraStyles = {}) => {
     });
   };
 
+  const addTable = child => {
+    const entityKey = Object.keys(entityMap).length;
+
+    const convertCellData = cell =>
+      cell.children
+        .map(str => {
+          if (str.type === 'Str') {
+            return str.value;
+          } else if (str.type === 'Html' && (str.value === '<br>' || str.value === '<br />')) {
+            return '\n';
+          }
+          return '';
+        })
+        .join('');
+
+    const data = {
+      columns: null,
+      rows: []
+    };
+    child.children.forEach((row, rowIndex) => {
+      if (rowIndex === 0) {
+        data.columns = row.children.map((cell, cellIndex) => ({
+          key: `Column${cellIndex}`,
+          value: convertCellData(cell)
+        }));
+      } else {
+        const rowValue = row.children.map((cell, cellIndex) => ({
+          key: `Row${rowIndex - 1}Cell${cellIndex}`,
+          value: convertCellData(cell)
+        }));
+        data.rows.push({
+          key: `Row${rowIndex - 1}`,
+          value: rowValue
+        });
+      }
+    });
+    entityMap[entityKey] = {
+      type: 'draft-js-table-plugin',
+      mutability: 'IMMUTABLE',
+      data
+    };
+    entityRanges.push({
+      key: entityKey,
+      length: 1,
+      offset: 0
+    });
+  };
+
   const parseChildren = (child, style) => {
     // RegEx: [[ embed url=<anything> ]]
     const videoShortcodeRegEx = /^\[\[\s(?:embed)\s(?:url=(\S+))\s\]\]/;
@@ -169,6 +260,10 @@ const parseMdLine = (line, existingEntities, extraStyles = {}) => {
           addVideo(child);
         }
         break;
+      case 'Table':
+        addTable(child);
+        text = ' ';
+        return;
       default:
     }
 

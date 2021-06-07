@@ -52,6 +52,18 @@ const applyAtomicStyle = (block, entityMap, content) => {
   if (type === 'draft-js-video-plugin-video') {
     return `${strippedContent}[[ embed url=${data.url || data.src} ]]`;
   }
+  if (type === 'draft-js-table-plugin') {
+    const header = [...data.columns].map(column => column.value.replace('\n', '<br>'));
+    const rows = [...data.rows].map(row =>
+      [...row.value].map(cell => cell.value.replace('\n', '<br>'))
+    );
+    let md = `| ${header.join(' | ')} |`;
+    md += '\n' + `|${' --- |'.repeat(header.length)}`;
+    rows.forEach(row => {
+      md += '\n' + `| ${row.join(' | ')} |`;
+    });
+    return `${md}`;
+  }
   return `${strippedContent}![${data.fileName || ''}](${data.url || data.src})`;
 };
 
