@@ -1,8 +1,30 @@
 'use strict';
 
 const defaultMarkdownDict = {
-  BOLD: '__',
-  ITALIC: '*'
+  BOLD: {
+    before: '__',
+    after: '__'
+  },
+  ITALIC: {
+    before: '*',
+    after: '*'
+  },
+  STRIKETHROUGH: {
+    before: '~~',
+    after: '~~'
+  },
+  CODE: {
+    before: '`',
+    after: '`'
+  },
+  UNDERLINE: {
+    before: '<ins>',
+    after: '</ins>'
+  },
+  red: {
+    before: '<span color="red">',
+    after: '</span>'
+  }
 };
 
 const blockStyleDict = {
@@ -107,10 +129,15 @@ function fixWhitespacesInsideStyle(text, style) {
   // Temporary text that contains trimmed content wrapped into original pre- and post-texts
   const newText = `${pre}${bodyTrimmed}${post}`;
   // Insert leading and trailing spaces between pre-/post- contents and their respective markers
-  return newText.replace(
-    `${symbol}${bodyTrimmed}${symbol}`,
-    `${prefix}${symbol}${bodyTrimmed}${symbol}${postfix}`
-  );
+  return newText
+    .replace(
+      `${symbol.before}${bodyTrimmed}${symbol.before}`,
+      `${prefix}${symbol.before}${bodyTrimmed}${symbol.before}${postfix}`
+    )
+    .replace(
+      `${symbol.after}${bodyTrimmed}${symbol.after}`,
+      `${prefix}${symbol.after}${bodyTrimmed}${symbol.after}${postfix}`
+    );
 }
 
 function getInlineStyleRangesByLength(inlineStyleRanges) {
@@ -144,17 +171,18 @@ function draftjsToMd(raw, extraMarkdownDict) {
 
         // add the symbol to the md string and push the style in the applied styles stack
         stylesStartAtChar.forEach(currentStyle => {
-          const symbolLength = markdownDict[currentStyle.style].length;
-          newText += markdownDict[currentStyle.style];
-          totalOffset += symbolLength;
+          const currentStyleMarkdownDict = markdownDict[currentStyle.style];
+          const beforeSymbolLength = markdownDict[currentStyle.style].before.length;
+          newText += currentStyleMarkdownDict.before;
           appliedStyles.push({
-            symbol: markdownDict[currentStyle.style],
+            symbol: currentStyleMarkdownDict,
             range: {
-              start: currentStyle.offset + totalOffset,
-              end: currentStyle.offset + currentStyle.length + totalOffset
+              start: currentStyle.offset + totalOffset + beforeSymbolLength,
+              end: currentStyle.offset + currentStyle.length + totalOffset + beforeSymbolLength
             },
             end: currentStyle.offset + (currentStyle.length - 1)
           });
+          totalOffset += beforeSymbolLength;
         });
 
         // check for entityRanges starting and add if existing
@@ -180,10 +208,10 @@ function draftjsToMd(raw, extraMarkdownDict) {
           appliedStyles[appliedStyles.length - 1].end === index
         ) {
           const endingStyle = appliedStyles.pop();
-          newText += endingStyle.symbol;
+          newText += endingStyle.symbol.after;
 
           newText = fixWhitespacesInsideStyle(newText, endingStyle);
-          totalOffset += endingStyle.symbol.length;
+          totalOffset += endingStyle.symbol.after.length;
         }
 
         return newText;

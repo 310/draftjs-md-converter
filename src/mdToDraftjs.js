@@ -10,8 +10,31 @@ const defaultInlineStyles = {
   Emphasis: {
     type: 'ITALIC',
     symbol: '*'
+  },
+  Delete: {
+    type: 'STRIKETHROUGH',
+    symbol: '~~'
+  },
+  Code: {
+    type: 'CODE',
+    symbol: '`'
   }
 };
+
+const defaultInlineHtmlStyles = [
+  {
+    node: 'ins',
+    type: 'UNDERLINE',
+    closeTag: '</ins>'
+  },
+  {
+    node: 'span',
+    attributeKey: 'color',
+    attributeValue: 'red',
+    type: 'red',
+    closeTag: '</span>'
+  }
+];
 
 const defaultBlockStyles = {
   List: 'unordered-list-item',
@@ -121,12 +144,14 @@ const splitMdBlocks = md => {
 const parseMdLine = (line, existingEntities, extraStyles = {}) => {
   const inlineStyles = { ...defaultInlineStyles, ...extraStyles.inlineStyles };
   const blockStyles = { ...defaultBlockStyles, ...extraStyles.blockStyles };
+  const inlineHtmlStyles = defaultInlineHtmlStyles;
 
   const astString = parse(line);
   let text = '';
   const inlineStyleRanges = [];
   const entityRanges = [];
   const entityMap = existingEntities;
+  let htmlStyles = [];
 
   const addInlineStyleRange = (offset, length, style) => {
     inlineStyleRanges.push({ offset, length, style });
@@ -280,12 +305,54 @@ const parseMdLine = (line, existingEntities, extraStyles = {}) => {
         parseChildren(grandChild, newStyle);
       });
     } else {
+      if (child.type === 'Html') {
+        const d = new DOMParser();
+        const parsedHtml = d.parseFromString(child.value, 'text/html');
+        let found = false;
+        inlineHtmlStyles.forEach(htmlStyle => {
+          const node = parsedHtml.querySelector(htmlStyle.node);
+          if (node) {
+            if ('attributeKey' in htmlStyle) {
+              if (
+                htmlStyle.attributeKey in node.attributes &&
+                htmlStyle.attributeValue === node.attributes[htmlStyle.attributeKey].nodeValue
+              ) {
+                htmlStyles.push(htmlStyle);
+                found = true;
+              }
+            } else {
+              htmlStyles.push(htmlStyle);
+              found = true;
+            }
+          }
+        });
+        if (found) {
+          return;
+        }
+
+        htmlStyles.forEach(htmlStyle => {
+          if (child.value === htmlStyle.closeTag) {
+            const htmlStyleIndex = htmlStyles.lastIndexOf(htmlStyle);
+            if (htmlStyleIndex >= 0) {
+              htmlStyles = htmlStyles.filter((_, index) => index !== htmlStyleIndex);
+              found = true;
+            }
+          }
+        });
+        if (found) {
+          return;
+        }
+      }
+
       if (style) {
         addInlineStyleRange(text.length, child.value.length, style.type);
       }
       if (inlineStyles[child.type]) {
         addInlineStyleRange(text.length, child.value.length, inlineStyles[child.type].type);
       }
+      htmlStyles.forEach(htmlStyle => {
+        addInlineStyleRange(text.length, child.value.length, htmlStyle.type);
+      });
       text = `${text}${
         child.type === 'Image' || videoShortcodeRegEx.test(child.raw) ? ' ' : child.value
       }`;
