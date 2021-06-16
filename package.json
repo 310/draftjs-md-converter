@@ -6,6 +6,7 @@
   "module": "dist/index.esm.js",
   "types": "index.d.ts",
   "license": "MIT",
+  "type": "module",
   "engines": {
     "node": ">=10.0.0"
   },
@@ -45,9 +46,14 @@
   "homepage": "https://kadikraman.github.io/draftjs-md-converter",
   "devDependencies": {
     "@babel/core": "7.11.6",
+    "@babel/plugin-transform-object-assign": "^7.14.5",
+    "@babel/preset-env": "^7.14.5",
     "babel-eslint": "^10.1.0",
     "chai": "^3.5.0",
+    "core-js": "3",
     "dirty-chai": "^1.2.2",
+    "esbuild": "0.8.36",
+    "esbuild-plugin-babel": "^0.2.3",
     "eslint": "^3.9.0",
     "eslint-config-airbnb": "^6.2.0",
     "eslint-config-prettier": "^2.9.0",
@@ -58,15 +64,17 @@
     "husky": "4.2.1",
     "lint-staged": "^7.0.4",
     "mocha": "^2.4.5",
-    "esbuild": "0.8.36",
     "prettier": "1.19.1"
   },
   "dependencies": {
-    "@textlint/markdown-to-ast": "6.1.6"
+    "@textlint/markdown-to-ast": "12.0.0"
   },
   "husky": {
     "hooks": {
       "pre-commit": "lint-staged"
     }
-  }
+  },
+  "browserslist": [
+    "IE 11"
+  ]
 }
